@@ -127,15 +127,17 @@ public class BaseTreeView : TreeView
         var draggedItemIDs = DragAndDrop.GetGenericData(Drag_Data_Flag) as IList<int>;
         if (draggedItemIDs != null && draggedItemIDs.Count > 0)
         {
-            visualMode = DragAndDropVisualMode.Move;
-            if (args.performDrop)
-            {
-                var insertAtIndex = args.insertAtIndex;
-                var parentItem = args.parentItem;
-                var draggedItems = draggedItemIDs.ToList().ConvertAll(x => FindItemRecursive(x, rootItem));
-                var childCount = parentItem.children == null ? 0 : parentItem.children.Count;
+            var insertAtIndex = args.insertAtIndex;
+            var parentItem = args.parentItem;
+            if (parentItem == null) return DragAndDropVisualMode.None;
 
-                if (!IsSelfOrChild(draggedItems, parentItem))
+            var draggedItems = draggedItemIDs.ToList().ConvertAll(x => FindItemRecursive(x, rootItem));
+            var childCount = parentItem.children == null ? 0 : parentItem.children.Count;
+
+            if (!IsSelfOrChild(draggedItems, parentItem))
+            {
+                visualMode = DragAndDropVisualMode.Move;
+                if (args.performDrop)
                 {
                     var newItems = new List<BaseTreeViewItem>();
                     //标记拖拽的Item为移除状态
@@ -154,7 +156,6 @@ public class BaseTreeView : TreeView
                     {
                         if (insertAtIndex < 0 || insertAtIndex > childCount)
                         {
-                            insertAtIndex = childCount;
                             parentItem.children.AddRange(newItems);
                         }
                         else
@@ -169,17 +170,18 @@ public class BaseTreeView : TreeView
                             parentItem.AddChild(item);
                         }
                     }
-
-                    foreach (var item in newItems)
-                    {
-                        item.UpdateParent(parentItem);
-                    }
-                    RemoveItemsRecursive(rootItem);
                 }
+
+                RemoveItemsRecursive(rootItem);
+
+                BaseTreeViewItem.UpdateDepth(parentItem);
             }
 
-            ReloadAndSelect(draggedItemIDs);
-            Repaint();
+            if (visualMode != DragAndDropVisualMode.None)
+            {
+                ReloadAndSelect(draggedItemIDs);
+                Repaint();
+            }
         }
 
         return visualMode;
@@ -267,16 +269,16 @@ public class BaseTreeViewItem : TreeViewItem, IBaseTreeView
 
     public bool CanRemove { get; set; }
 
-    public void UpdateParent(TreeViewItem parentItem)
+    static public void UpdateDepth(TreeViewItem parentItem)
     {
-        this.parent = parentItem;
-        this.depth = parent.depth + 1;
-
-        if (this.hasChildren)
+        if (parentItem.hasChildren)
         {
-            foreach (var child in children)
+            foreach (var item in parentItem.children)
             {
-                (child as BaseTreeViewItem).UpdateParent(child.parent);
+                item.parent = parentItem;
+                item.depth = parentItem.depth + 1;
+
+                UpdateDepth(item);
             }
         }
     }
